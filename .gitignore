@@ -1,0 +1,14 @@
+node_modules
+.next
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+.DS_Store
+.vercel
+coverage
+*.log
+
+# Imported member and financial records are confidential. Never push these to Git.
+/private/legacy/
+*.env.local

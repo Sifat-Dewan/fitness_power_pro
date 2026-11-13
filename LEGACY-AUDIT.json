@@ -1,0 +1,18 @@
+{
+  "members": 277,
+  "plans": 4,
+  "legacyTransactions": 3464,
+  "matchedMemberPayments": 309,
+  "unattributedTransactions": 3155,
+  "revenueTotalBDT": 4232401,
+  "matchedRevenueBDT": 466500,
+  "unattributedRevenueBDT": 3765901,
+  "missingOrInvalidPhones": 61,
+  "blankGender": 1,
+  "duplicateMemberNumberOccurrences": 4,
+  "legacyImages": 3,
+  "missingStaffExport": true,
+  "missingAttendanceExport": true,
+  "missingLockerExport": true,
+  "missingExpensesExport": true
+}
