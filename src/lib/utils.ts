@@ -25,7 +25,8 @@ export function memberStatus(row: { status?: string | null; startDate?: string |
   if (row.archivedAt || row.status === "inactive") return "inactive";
   if (row.status === "frozen") return "frozen";
   if (row.startDate && row.startDate > todayISO()) return "pending";
-  if (!row.expireDate || row.expireDate < todayISO()) return "expired";
+  if (!row.expireDate) return "unassigned";
+  if (row.expireDate < todayISO()) return "expired";
   return "active";
 }
 export function initials(name?: string) { return (name || "?").trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase(); }

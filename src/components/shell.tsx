@@ -7,12 +7,12 @@ import { authClient } from "@/lib/auth-client";
 import { can, type Actor } from "@/lib/access";
 import { cls } from "@/lib/utils";
 import { Avatar } from "./ui";
-import { LayoutDashboard, UsersRound, Dumbbell, CreditCard, ClipboardCheck, LockKeyhole, UserRoundCog, Wallet, ChartNoAxesCombined, ScrollText, Settings2, ShieldCheck, Sun, Moon, Search, ChevronDown, LogOut, Menu, X, Keyboard, Bell, Sparkles, ArrowUpRight, CircleHelp } from "lucide-react";
+import { LayoutDashboard, UsersRound, Dumbbell, CreditCard, ClipboardCheck, LockKeyhole, UserRoundCog, Wallet, Fingerprint, ChartNoAxesCombined, ScrollText, Settings2, ShieldCheck, Sun, Moon, Search, ChevronDown, LogOut, Menu, X, Keyboard, Bell, Sparkles, ArrowUpRight, CircleHelp } from "lucide-react";
 
 const ActorContext=createContext<Actor|null>(null);
 export const useActor=()=>{const a=useContext(ActorContext);if(!a)throw new Error("User context missing");return a};
 const NAV=[
-  {group:"WORKSPACE",links:[{href:"/dashboard",label:"Overview",icon:LayoutDashboard},{href:"/members",label:"Members",icon:UsersRound},{href:"/attendance",label:"Attendance",icon:ClipboardCheck}]},
+  {group:"WORKSPACE",links:[{href:"/dashboard",label:"Overview",icon:LayoutDashboard},{href:"/members",label:"Members",icon:UsersRound},{href:"/attendance",label:"Attendance",icon:ClipboardCheck},{href:"/fingerprint-devices",label:"Fingerprint Devices",icon:Fingerprint}]},
   {group:"MANAGEMENT",links:[{href:"/plans",label:"Membership Plans",icon:CreditCard},{href:"/payments",label:"Payments",icon:Wallet},{href:"/lockers",label:"Lockers",icon:LockKeyhole},{href:"/staff",label:"Staff",icon:UserRoundCog},{href:"/expenses",label:"Expenses",icon:Wallet},{href:"/legacy-ledger",label:"Legacy Ledger",icon:ScrollText}]},
   {group:"INSIGHTS",links:[{href:"/reports",label:"Reports & Analytics",icon:ChartNoAxesCombined},{href:"/activity",label:"Activity Log",icon:ScrollText}]},
   {group:"SYSTEM",links:[{href:"/team",label:"Team Access",icon:ShieldCheck},{href:"/settings",label:"Settings",icon:Settings2}]},

@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { members, plans, memberships, payments, attendance, lockers, lockerAssignments, expenses, staff, settings, user, session, account, auditLogs, legacyCostRecords } from "@/db/schema";
+import { members, plans, memberships, payments, attendance, lockers, lockerAssignments, expenses, staff, settings, user, session, account, auditLogs, legacyCostRecords, deviceUsers } from "@/db/schema";
 import { eq, and, isNull, desc, asc, getTableColumns, sql, sum } from "drizzle-orm";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { addPlanMonths, memberStatus, daysUntil, todayISO, dateKey } from "./utils";
@@ -15,8 +15,9 @@ export async function listResource(resource: ResourceName) {
   if (demoEnabled()) return demoList(resource);
   switch(resource) {
     case "members": {
-      const rows = await db.select({ ...getTableColumns(members), planName:plans.name, planColor:plans.color })
-        .from(members).leftJoin(plans,eq(members.planId,plans.id)).where(isNull(members.archivedAt)).orderBy(desc(members.joinedAt)).limit(3000);
+      const rows = await db.select({ ...getTableColumns(members), planName:plans.name, planColor:plans.color,
+        deviceUserId:deviceUsers.userId,deviceUid:deviceUsers.uid,deviceState:deviceUsers.state,devicePrivilege:deviceUsers.privilege,nameMismatch:deviceUsers.nameMismatch })
+        .from(members).leftJoin(plans,eq(members.planId,plans.id)).leftJoin(deviceUsers,and(eq(deviceUsers.memberId,members.id),eq(deviceUsers.deviceId,process.env.K40_DEVICE_ID||"gym-k40-01"))).where(isNull(members.archivedAt)).orderBy(desc(members.joinedAt)).limit(3000);
       return rows.map(r=>({...r,membershipStatus:memberStatus(r),daysLeft:daysUntil(r.expireDate)}));
     }
     case "plans": return await db.select({...getTableColumns(plans), memberCount:sql<number>`count(${members.id})::int`})
@@ -61,15 +62,32 @@ export async function createResource(resource:ResourceName,payload:any,actor:Act
   try {
     switch(resource) {
       case "members": return await db.transaction(async(tx)=>{
-        const [plan]=await tx.select().from(plans).where(eq(plans.id,payload.planId)).limit(1);
-        if(!plan||!plan.active)throw new ApiError(422,"Select an active membership plan.");
-        const [config]=await tx.select().from(settings).limit(1);
-        const due=plan.price+(config?.admissionFee||0)-payload.discount;
-        if(due<0 || payload.amountPaid>due)throw new ApiError(422,"Amount paid must be between zero and the total after discount.");
-        const expiry=addPlanMonths(payload.startDate,plan.durationMonths);
-        const [record]=await tx.insert(members).values({name:payload.name,phone:payload.phone||null,email:payload.email||null,gender:payload.gender,dateOfBirth:payload.dateOfBirth||null,address:payload.address||null,emergencyContact:payload.emergencyContact||null,imageUrl:payload.imageUrl||null,notes:payload.notes||null,planId:plan.id,startDate:payload.startDate,expireDate:expiry,status:payload.status}).returning();
-        const [period]=await tx.insert(memberships).values({memberId:record.id,planId:plan.id,startsOn:payload.startDate,expiresOn:expiry,planPrice:plan.price,admissionFee:config?.admissionFee||0,discount:payload.discount,type:"join",createdBy:actor.id}).returning();
-        if(payload.amountPaid>0)await tx.insert(payments).values({memberId:record.id,membershipId:period.id,amount:payload.amountPaid,method:payload.paymentMethod,type:"membership",createdBy:actor.id});
+        let plan:typeof plans.$inferSelect|undefined;
+        let expiry:string|null=null;
+        let fee=0;
+        if(payload.planId){
+          [plan]=await tx.select().from(plans).where(eq(plans.id,payload.planId)).limit(1);
+          if(!plan||!plan.active)throw new ApiError(422,"Select an active membership plan.");
+          if(!payload.startDate)throw new ApiError(422,"Membership start date is required when selecting a plan.");
+          const [config]=await tx.select().from(settings).limit(1);
+          fee=config?.admissionFee||0;
+          const due=plan.price+fee-payload.discount;
+          if(due<0||payload.amountPaid>due)throw new ApiError(422,"Amount paid must be between zero and the total after discount.");
+          expiry=addPlanMonths(payload.startDate,plan.durationMonths);
+        } else if(payload.amountPaid>0||payload.discount>0) throw new ApiError(422,"Choose a plan before adding payment or discount.");
+        const [record]=await tx.insert(members).values({
+          ...(payload.memberNo?{memberNo:payload.memberNo}:{}),name:payload.name,phone:payload.phone||null,
+          email:payload.email||null,gender:payload.gender||null,dateOfBirth:payload.dateOfBirth||null,
+          address:payload.address||null,emergencyContact:payload.emergencyContact||null,
+          imageUrl:payload.imageUrl||null,notes:payload.notes||null,planId:plan?.id||null,
+          startDate:plan?payload.startDate:null,expireDate:expiry,status:payload.status
+        }).returning();
+        if(payload.memberNo)await tx.execute(sql`select setval(pg_get_serial_sequence('members','member_no'), greatest((select coalesce(max(member_no),0) from members),1),true)`);
+        if(plan && expiry){
+          const [period]=await tx.insert(memberships).values({memberId:record.id,planId:plan.id,startsOn:payload.startDate,expiresOn:expiry,
+            planPrice:plan.price,admissionFee:fee,discount:payload.discount,type:"join",createdBy:actor.id}).returning();
+          if(payload.amountPaid>0)await tx.insert(payments).values({memberId:record.id,membershipId:period.id,amount:payload.amountPaid,method:payload.paymentMethod,type:"membership",createdBy:actor.id});
+        }
         await logEvent(tx,actor,"created","members",record.id,{name:record.name,memberNo:record.memberNo});
         return record;
       });
@@ -149,7 +167,13 @@ export async function deleteResource(resource:ResourceName,id:string,actor:Actor
   if(demoEnabled())return demoDelete(resource as any,id);
   try {
     switch(resource) {
-      case "members":return await db.transaction(async(tx)=>{const [r]=await tx.update(members).set({archivedAt:new Date(),status:"inactive",updatedAt:new Date()}).where(and(eq(members.id,id),isNull(members.archivedAt))).returning();if(!r)throw new ApiError(404,"Member not found.");await logEvent(tx,actor,"archived","members",id,{name:r.name});return {success:true};});
+      case "members":return await db.transaction(async(tx)=>{
+        // Explicit K40 deletion is separate because it destroys the registered
+        // fingerprint and must be acknowledged by the physical terminal.
+        const [linked]=await tx.select({id:deviceUsers.id}).from(deviceUsers)
+          .where(and(eq(deviceUsers.memberId,id),sql`${deviceUsers.state} != 'deleted'`)).limit(1);
+        if(linked) throw new ApiError(409,"This member is linked to K40. Use 'Delete from website + K40' with ID confirmation.");
+        const [r]=await tx.update(members).set({archivedAt:new Date(),status:"inactive",updatedAt:new Date()}).where(and(eq(members.id,id),isNull(members.archivedAt))).returning();if(!r)throw new ApiError(404,"Member not found.");await logEvent(tx,actor,"archived","members",id,{name:r.name});return {success:true};});
       case "plans":return await db.transaction(async(tx)=>{const [used]=await tx.select({id:members.id}).from(members).where(eq(members.planId,id)).limit(1);if(used)throw new ApiError(409,"This plan has members. Deactivate it instead of deleting it.");const [r]=await tx.delete(plans).where(eq(plans.id,id)).returning();if(!r)throw new ApiError(404,"Plan not found.");await logEvent(tx,actor,"deleted","plans",id);return {success:true};});
       case "lockers":return await db.transaction(async(tx)=>{const [used]=await tx.select({id:lockerAssignments.id}).from(lockerAssignments).where(eq(lockerAssignments.lockerId,id)).limit(1);if(used)throw new ApiError(409,"Locker has assignment history. Mark it for maintenance instead.");const [r]=await tx.delete(lockers).where(eq(lockers.id,id)).returning();if(!r)throw new ApiError(404,"Locker not found.");await logEvent(tx,actor,"deleted","lockers",id);return {success:true};});
       case "expenses":return await db.transaction(async(tx)=>{const [r]=await tx.delete(expenses).where(eq(expenses.id,id)).returning();if(!r)throw new ApiError(404,"Expense not found.");await logEvent(tx,actor,"deleted","expenses",id,{amount:r.amount});return {success:true};});
@@ -222,7 +246,7 @@ export async function getOverview() {
     db.select({
       total:sql<number>`count(*)::int`,
       active:sql<number>`count(*) filter (where ${members.status} = 'active' and (${members.startDate} is null or ${members.startDate} <= ${today}) and ${members.expireDate} >= ${today})::int`,
-      expired:sql<number>`count(*) filter (where ${members.status} = 'active' and (${members.expireDate} < ${today} or ${members.expireDate} is null))::int`,
+      expired:sql<number>`count(*) filter (where ${members.status} = 'active' and ${members.expireDate} < ${today})::int`,
       newMembers:sql<number>`count(*) filter (where timezone(${timezone},${members.joinedAt})::date >= ${monthStart}::date)::int`
     }).from(members).where(isNull(members.archivedAt)),
     db.select({

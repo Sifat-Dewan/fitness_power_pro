@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { attendance, expenses, lockerAssignments, lockers, members, payments, plans, staff } from "@/db/schema";
+import { attendance, expenses, lockerAssignments, lockers, members, payments, plans, staff, deviceUsers } from "@/db/schema";
 import { and, asc, count, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import { requireActor, ApiError, demoEnabled } from "@/lib/permissions";
 import { demoList } from "@/lib/demo";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ resource: string }> };
 const BATCH = 250;
 const exportColumns: Record<string, string[]> = {
-  members:["memberNo","name","phone","email","gender","planName","status","startDate","expireDate"],
+  members:["memberNo","deviceUserId","deviceUid","name","phone","email","gender","planName","status","startDate","expireDate"],
   plans:["name","durationMonths","price","active","memberCount"],
   payments:["memberNo","memberName","amount","method","type","reference","paidAt"],
   attendance:["memberNo","memberName","checkedInAt","checkedOutAt","source"],
@@ -29,8 +29,10 @@ function csvSafe(v: unknown) {
 async function batch(resource: string, offset: number): Promise<Array<Record<string, unknown>>> {
   switch(resource) {
     case "members": {
-      const rows = await db.select({...getTableColumns(members),planName:plans.name}).from(members)
-        .leftJoin(plans,eq(members.planId,plans.id)).where(isNull(members.archivedAt))
+      const rows = await db.select({...getTableColumns(members),planName:plans.name,deviceUserId:deviceUsers.userId,deviceUid:deviceUsers.uid}).from(members)
+        .leftJoin(plans,eq(members.planId,plans.id))
+        .leftJoin(deviceUsers,and(eq(deviceUsers.memberId,members.id),eq(deviceUsers.deviceId,process.env.K40_DEVICE_ID||"gym-k40-01")))
+        .where(isNull(members.archivedAt))
         .orderBy(asc(members.memberNo)).limit(BATCH).offset(offset);
       return rows.map(row=>({...row,status:memberStatus(row)}));
     }

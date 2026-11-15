@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { members, plans, payments, attendance, lockers, lockerAssignments, expenses, staff, auditLogs, user, legacyCostRecords } from "@/db/schema";
+import { members, plans, payments, attendance, lockers, lockerAssignments, expenses, staff, auditLogs, user, legacyCostRecords, deviceUsers } from "@/db/schema";
 import { and, asc, desc, eq, gte, ilike, isNotNull, isNull, lt, or, sql, count, getTableColumns } from "drizzle-orm";
 import { demoEnabled } from "./permissions";
 import { demoList } from "./demo";
@@ -60,26 +60,30 @@ export async function listPagedResource(resource: ResourceName, q: PageOptions):
   if (resource === "attendance") await completeTimedOutAttendance();
   if (resource === "members") {
     const conditions:any[] = [isNull(members.archivedAt)];
-    if(q.search) conditions.push(or(ilike(members.name,search),ilike(members.phone,search),ilike(members.email,search),sql`${members.memberNo}::text ILIKE ${search}`));
+    if(q.search) conditions.push(or(ilike(members.name,search),ilike(members.phone,search),ilike(members.email,search),sql`${members.memberNo}::text ILIKE ${search}`,sql`exists (select 1 from device_users du where du.member_id=${members.id} and du.user_id ilike ${search})`));
     if(q.memberId)conditions.push(validUuid(q.memberId)?eq(members.id,q.memberId):sql`false`);
     if(q.planId && q.planId !== "all" && validUuid(q.planId)) conditions.push(eq(members.planId,q.planId));
     else if(q.planId && q.planId !== "all") conditions.push(sql`false`);
     if(q.status && q.status !== "all") {
-      if(q.status === "pending") conditions.push(sql`${members.status} = 'active' AND ${members.startDate} > ${today}`);
+      if(q.status === "unassigned")conditions.push(and(isNull(members.expireDate),eq(members.status,"active")));
+      else if(q.status === "pending") conditions.push(sql`${members.status} = 'active' AND ${members.startDate} > ${today}`);
       else if(q.status === "active") conditions.push(sql`${members.status} = 'active' AND ${members.startDate} <= ${today} AND ${members.expireDate} >= ${today}`);
       else if(q.status === "expiring") conditions.push(sql`${members.status} = 'active' AND ${members.startDate} <= ${today} AND ${members.expireDate} >= ${today} AND ${members.expireDate} <= (${today}::date + 7)`);
-      else if(q.status === "expired") conditions.push(sql`${members.status} = 'active' AND (${members.expireDate} < ${today} OR ${members.expireDate} IS NULL)`);
+      else if(q.status === "expired") conditions.push(sql`${members.status} = 'active' AND ${members.expireDate} < ${today}`);
       else conditions.push(eq(members.status, q.status));
     }
     const where = and(...conditions);
     const [t] = await db.select({ value: count() }).from(members).where(where);
-    const rows = await db.select({ ...getTableColumns(members), planName:plans.name, planColor:plans.color })
-      .from(members).leftJoin(plans,eq(members.planId,plans.id)).where(where).orderBy(desc(members.joinedAt),desc(members.id)).limit(q.pageSize).offset(offset);
+    const rows = await db.select({ ...getTableColumns(members),planName:plans.name,planColor:plans.color,
+      deviceUserId:deviceUsers.userId,deviceUid:deviceUsers.uid,deviceState:deviceUsers.state,
+      devicePrivilege:deviceUsers.privilege,nameMismatch:deviceUsers.nameMismatch })
+      .from(members).leftJoin(plans,eq(members.planId,plans.id))
+      .leftJoin(deviceUsers,and(eq(deviceUsers.memberId,members.id),eq(deviceUsers.deviceId,process.env.K40_DEVICE_ID||"gym-k40-01"))).where(where).orderBy(desc(members.joinedAt),desc(members.id)).limit(q.pageSize).offset(offset);
     return result(rows.map(r=>({...r,membershipStatus:memberStatus(r),daysLeft:daysUntil(r.expireDate)})),num(t?.value),q);
   }
   if (resource === "attendance") {
     const conditions:any[]=[];
-    if(q.search) conditions.push(or(ilike(members.name,search),sql`${members.memberNo}::text ILIKE ${search}`));
+    if(q.search) conditions.push(or(ilike(members.name,search),sql`${members.memberNo}::text ILIKE ${search}`,sql`exists (select 1 from device_users du where du.member_id=${members.id} and du.user_id ilike ${search})`));
     if(q.status === "inside") conditions.push(isNull(attendance.checkedOutAt));
     if(q.status === "completed") conditions.push(isNotNull(attendance.checkedOutAt));
     if(q.memberId) conditions.push(validUuid(q.memberId)?eq(attendance.memberId,q.memberId):sql`false`);

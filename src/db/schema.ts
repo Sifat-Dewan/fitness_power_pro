@@ -218,3 +218,52 @@ export const legacyMemberSources = pgTable("legacy_member_sources", {
   originalData: jsonb("original_data").$type<Record<string, string>>().notNull(),
   importedAt: ts("imported_at").notNull().defaultNow(),
 });
+
+// K40 integration: keep device identities distinct from web membership identities.
+// The displayed K40 user_id is a string; the device-internal uid is a different number.
+export const gymDevices = pgTable("gym_devices", {
+  id: varchar("id", { length: 70 }).primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  model: varchar("model", { length: 60 }).notNull().default("ZKTeco K40"),
+  lastSeenAt: ts("last_seen_at"),
+  lastInventoryAt: ts("last_inventory_at"),
+  lastError: text("last_error"),
+  createdAt: ts("created_at").defaultNow().notNull(),
+});
+export const deviceUsers = pgTable("device_users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  deviceId: varchar("device_id", { length: 70 }).notNull().references(() => gymDevices.id, { onDelete: "restrict" }),
+  // Exactly as recorded on the device. Do NOT confuse with internal UID.
+  userId: varchar("user_id", { length: 40 }).notNull(),
+  uid: integer("uid").notNull(),
+  name: varchar("name", { length: 180 }).notNull(),
+  privilege: integer("privilege").notNull().default(0),
+  memberId: uuid("member_id").references(() => members.id, { onDelete: "set null" }),
+  state: varchar("state", { length: 32 }).notNull().default("present"),
+  nameMismatch: boolean("name_mismatch").notNull().default(false),
+  lastSeenAt: ts("last_seen_at").defaultNow().notNull(),
+  createdAt: ts("created_at").defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("device_users_device_user_id_unique").on(t.deviceId, t.userId),
+  index("device_users_member_idx").on(t.memberId),
+  index("device_users_state_idx").on(t.deviceId, t.state),
+]);
+export const deviceCommands = pgTable("device_commands", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  deviceId: varchar("device_id", { length: 70 }).notNull().references(() => gymDevices.id, { onDelete: "restrict" }),
+  memberId: uuid("member_id").references(() => members.id, { onDelete: "set null" }),
+  type: varchar("type", { length: 32 }).notNull(), // delete_user only until K40 firmware is tested
+  targetUserId: varchar("target_user_id", { length: 40 }).notNull(),
+  targetUid: integer("target_uid").notNull(),
+  status: varchar("status", { length: 24 }).notNull().default("pending"),
+  attempts: integer("attempts").notNull().default(0),
+  leaseToken: uuid("lease_token"),
+  leaseUntil: ts("lease_until"),
+  lastError: text("last_error"),
+  requestedBy: text("requested_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: ts("created_at").defaultNow().notNull(),
+  completedAt: ts("completed_at"),
+}, (t) => [
+  index("device_commands_queue_idx").on(t.deviceId, t.status, t.createdAt),
+  index("device_commands_member_idx").on(t.memberId),
+]);

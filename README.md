@@ -1,3 +1,5 @@
+> **ZKTeco K40 integration:** See [INTEGRATE-K40.md](./INTEGRATE-K40.md) for the new device connector, safe database migration, user syncing and queued deletion setup. The connector requires an always-on computer inside the gym and has not been hardware-tested by the author.
+
 # FITNESS POWER — Gym Operations Platform
 
 A full-stack, dark/light-mode Next.js application for running a gym. The UI takes its inspiration from the supplied Fitness Power screenshots, with a redesigned, responsive command-center experience. Its live mode uses **Neon Postgres + Drizzle ORM**, **Better Auth**, and **Cloudinary**. A separate, explicitly marked, **development-only local demo** makes it possible to explore the UI without cloud credentials.
@@ -105,6 +107,7 @@ Open `.env.local` and fill the fields:
 | Environment variable | Where to get the value |
 | --- | --- |
 | `DATABASE_URL` | Neon dashboard → Connect → **pooled connection string**; PostgreSQL URL, not API key |
+| `DATABASE_DIRECT_URL` | Recommended for schema setup/migrations: Neon → Connect → toggle pooling OFF and copy direct connection string |
 | `BETTER_AUTH_SECRET` | Locally generate a random 32+-character secret with `openssl rand -base64 48` or `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"` |
 | `BETTER_AUTH_URL` | `http://localhost:3000` locally; your exact `https://...` root URL on production |
 | `BOOTSTRAP_OWNER_EMAIL` | Your initial owner login email |
@@ -116,6 +119,10 @@ Open `.env.local` and fill the fields:
 | `DEMO_MODE` | Set `false` for real use. `true` provides a **development-only, ephemeral local preview** |
 
 **Do not commit `.env.local`, secrets, member exports, or real member photos to Git.** `.gitignore` ignores dotenv local files and dependencies. Rotate a secret if accidentally exposed.
+
+### Setup script fix and migration connection
+
+The database module creates its connection pool when imported. The `db:bootstrap` and `db:seed` scripts now load `.env.local` **before dynamically importing** the database, avoiding an accidentally initialized localhost fallback connection. The Drizzle config uses `DATABASE_DIRECT_URL` (recommended for migrations) when provided, falling back to `DATABASE_URL`. For Neon, use the pooled URL for `DATABASE_URL` and the direct non-pooler URL for `DATABASE_DIRECT_URL`.
 
 ### Create the database and first owner
 
@@ -241,8 +248,3 @@ Roles are enforced on the **server** for every protected API request, not just h
 - **Local preview:** fake sample records are intentionally ephemeral. Real mode persists to Neon.
 
 This code is a functional project foundation, not a certification that an untested production deployment will run without issues. Verify with your actual Neon and Cloudinary connections before using it for live financial or personally identifiable data.
-#   f i t n e s s _ p o w e r  
- #   f i t n e s s _ p o w e r _ p r o  
- #   f i t n e s s _ p o w e r _ p r o  
- #   f i t n e s s _ p o w e r _ p r o  
- 

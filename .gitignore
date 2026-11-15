@@ -12,3 +12,9 @@ coverage
 # Imported member and financial records are confidential. Never push these to Git.
 /private/legacy/
 *.env.local
+
+# Local K40 connector credentials and device backups
+/device-connector/.env
+/device-connector/*.csv
+/device-connector/*.bak
+/device-connector/*.log

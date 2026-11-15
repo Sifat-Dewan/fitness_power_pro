@@ -7,8 +7,17 @@ const photo = z.string().max(1000).nullish().refine(v => !v || (() => {try {cons
 const cash = z.coerce.number().int().min(0).max(100000000);
 const requiredCash = z.coerce.number().int().min(1).max(100000000);
 const uuid = z.string().uuid();
-const memberCommon = z.object({ name:z.string().trim().min(2).max(180), phone:z.string().trim().regex(/^01[0-9]{9}$/, "Phone must be exactly 11 digits and start with 01"),email:z.union([z.email(),z.literal(""),z.null()]).optional(), gender:z.enum(["male","female","other"], {error:"Please select a gender"}),dateOfBirth:dateField.nullish().or(z.literal("")),address:opt(500),emergencyContact:opt(150), imageUrl:photo,notes:opt(2000),status:z.enum(["active","frozen","inactive"]).default("active") });
-export const createMember = memberCommon.extend({planId:uuid,startDate:dateField,amountPaid:cash.default(0),paymentMethod:z.enum(["cash","bkash","nagad","bank","card"]).default("cash"),discount:cash.default(0)});
+// Temporary migration mode: only ID and name are mandatory. This permits
+// importing all fingerprint users even when phone/gender/plan are unknown.
+const optionalPhone = z.union([z.string().trim().regex(/^01[0-9]{9}$/, "Use 11 digits starting with 01"), z.literal(""), z.null()]).optional().transform(v=>v||null);
+const optionalGender = z.union([z.enum(["male","female","other"]),z.literal(""),z.null()]).optional().transform(v=>v||null);
+const optionalPlan = z.union([uuid,z.literal(""),z.null()]).optional().transform(v=>v||null);
+const optionalDate = z.union([dateField,z.literal(""),z.null()]).optional().transform(v=>v||null);
+const memberCommon = z.object({name:z.string().trim().min(1).max(180),phone:optionalPhone,email:z.union([z.email(),z.literal(""),z.null()]).optional(),
+  gender:optionalGender,dateOfBirth:dateField.nullish().or(z.literal("")),address:opt(500),emergencyContact:opt(150),imageUrl:photo,
+  notes:opt(2000),status:z.enum(["active","frozen","inactive"]).default("active")});
+export const createMember = memberCommon.extend({memberNo:z.coerce.number().int().min(1).max(2147483646),planId:optionalPlan,startDate:optionalDate,
+  amountPaid:cash.default(0),paymentMethod:z.enum(["cash","bkash","nagad","bank","card"]).default("cash"),discount:cash.default(0)});
 export const updateMember = memberCommon.partial();
 export const createPlan = z.object({name:z.string().trim().min(2).max(120),durationMonths:z.coerce.number().int().min(1).max(60),price:cash,description:z.string().max(1000).default(""),color:z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#5786ff"),active:z.boolean().default(true)});
 export const updatePlan = createPlan.partial();

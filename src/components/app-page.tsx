@@ -15,9 +15,10 @@ const ReportsPage=dynamic(()=>import("./insights").then(m=>m.ReportsPage),{loadi
 const ActivityPage=dynamic(()=>import("./insights").then(m=>m.ActivityPage),{loading:()=> <SkeletonPage/>});
 const SettingsPage=dynamic(()=>import("./system").then(m=>m.SettingsPage),{loading:()=> <SkeletonPage/>});
 const LegacyLedgerPage=dynamic(()=>import("./legacy-ledger").then(m=>m.LegacyLedgerPage),{loading:()=> <SkeletonPage/>});
+const K40DevicesPage=dynamic(()=>import("./k40-devices").then(m=>m.K40DevicesPage),{loading:()=> <SkeletonPage/>});
 const TeamPage=dynamic(()=>import("./system").then(m=>m.TeamPage),{loading:()=> <SkeletonPage/>});
-type Section="dashboard"|"members"|"attendance"|"plans"|"payments"|"lockers"|"staff"|"expenses"|"reports"|"activity"|"team"|"settings"|"legacy-ledger";
+type Section="dashboard"|"members"|"attendance"|"plans"|"payments"|"lockers"|"staff"|"expenses"|"reports"|"activity"|"team"|"settings"|"legacy-ledger"|"fingerprint-devices";
 export function AppPage({section}:{section:Section}){
-  const component={dashboard:<Dashboard/>,members:<MembersPage/>,attendance:<AttendancePage/>,plans:<PlansPage/>,payments:<PaymentsPage/>,lockers:<LockersPage/>,staff:<StaffPage/>,expenses:<ExpensesPage/>,reports:<ReportsPage/>,activity:<ActivityPage/>,team:<TeamPage/>,settings:<SettingsPage/>,"legacy-ledger":<LegacyLedgerPage/>}[section];
+  const component={dashboard:<Dashboard/>,members:<MembersPage/>,attendance:<AttendancePage/>,plans:<PlansPage/>,payments:<PaymentsPage/>,lockers:<LockersPage/>,staff:<StaffPage/>,expenses:<ExpensesPage/>,reports:<ReportsPage/>,activity:<ActivityPage/>,team:<TeamPage/>,settings:<SettingsPage/>,"legacy-ledger":<LegacyLedgerPage/>,"fingerprint-devices":<K40DevicesPage/>}[section];
   return <Suspense fallback={<SkeletonPage/>}>{component}</Suspense>;
 }

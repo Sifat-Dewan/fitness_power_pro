@@ -14,8 +14,8 @@ export function Avatar({name,image,size="md",zoomable=false}:{name?:string,image
     {show&&image&&typeof document!=="undefined"&&createPortal(<div className="photo-lightbox" role="dialog" aria-modal="true" aria-label={`${name||"Member"} enlarged photo`} onMouseDown={e=>{if(e.target===e.currentTarget)setShow(false)}}><button className="photo-lightbox-close" aria-label="Close photo" onClick={()=>setShow(false)}><X size={22}/></button><img src={image} alt={name||"Enlarged photo"} onClick={e=>e.stopPropagation()}/><span className="photo-lightbox-caption">{name||"Member photo"} - click outside to close</span></div>,document.body)}</>;
 }
 export function Badge({status,text}:{status?:string|null,text?:string}) {
-  const tone=["active","available","paid","present","approved"].includes(status||"")?"success":["expired","inactive","banned","maintenance","overdue","critical"].includes(status||"")?"danger":["frozen","pending","on_leave","warning"].includes(status||"")?"warning":"info";
-  const label=text||({on_leave:"On leave",occupied:"Occupied"} as Record<string,string>)[status||""]||status||"Unknown";
+  const tone=["active","available","paid","present","approved"].includes(status||"")?"success":["expired","inactive","banned","maintenance","overdue","critical"].includes(status||"")?"danger":["frozen","pending","on_leave","warning","unassigned"].includes(status||"")?"warning":"info";
+  const label=text||({on_leave:"On leave",occupied:"Occupied",unassigned:"No membership"} as Record<string,string>)[status||""]||status||"Unknown";
   return <span className={`mini-badge ${tone}`}><span className={`dot ${tone==="success"?"":tone==="danger"?"red":tone==="warning"?"orange":"gray"}`}/>{label.charAt(0).toUpperCase()+label.slice(1)}</span>;
 }
 export function MemberBadge({member}:{member:RowData}) { const state=membershipUrgency(member);const remaining=daysUntil(member.expireDate);const starts=daysUntil(member.startDate);
